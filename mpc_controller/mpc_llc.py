@@ -16,7 +16,7 @@ class MPCController(Node):
         
         self.cmd_pub: Publisher[TwistStamped] = self.create_publisher(TwistStamped, '/cmd_vel', 1)
 
-        self.create_subscription(Path, '/planned_trajectory', self.trajectory_callback, 10)
+        self.create_subscription(Path, '/planners/mpc_path', self.trajectory_callback, 10)
         self.create_subscription(Odometry, '/Odometry', self.pose_callback, 10)
         self.create_subscription(PolygonArray, '/convex_hulls', self.convex_hull_callback, 10)
 
