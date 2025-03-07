@@ -156,7 +156,7 @@ private:
             MX position = X(Slice(0, 2), k);
             int ref_index = min(closest_idx + static_cast<long unsigned int>(k), mpc_path_->poses.size() - 1);
             geometry_msgs::msg::PoseStamped ref_pose = mpc_path_->poses[ref_index];
-            DM ref_position = reshape(DM({ref_pose.pose.position.x, ref_pose.pose.position.y, 0.0}), 3, 1);
+            DM ref_position = reshape(DM({ref_pose.pose.position.x, ref_pose.pose.position.y}), 2, 1);
 
             MX state_penalty = position - ref_position;
             MX control_penalty = U(Slice(), k);
