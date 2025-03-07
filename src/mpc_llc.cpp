@@ -10,6 +10,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <casadi/casadi.hpp>
 #include <chrono>
+#include <limits>
 
 using namespace std;
 using namespace casadi;
@@ -133,9 +134,9 @@ private:
         double x_odom = odometry_->pose.pose.position.x;
         double y_odom = odometry_->pose.pose.position.y;
 
-        int closest_idx = 0;
-        double min_dist = numerical_limits<double>::infinity();
-        for (int i=0; i < mpc_path_->poses.size(); i++){
+        long unsigned int closest_idx = 0;
+        double min_dist = numeric_limits<double>::infinity();
+        for (long unsigned int i=0; i < mpc_path_->poses.size(); i++){
             double x_path = mpc_path_->poses[i].pose.position.x;
             double y_path = mpc_path_->poses[i].pose.position.y;
             double dist = sqrt(pow(x_odom - x_path, 2) + pow(y_odom - y_path, 2));
@@ -153,7 +154,7 @@ private:
         MX objective = 0.0;
         for (int k=0; k < N; ++k){
             MX position = X(Slice(0, 2), k);
-            int ref_index = min(closest_idx + k, mpc_path_->poses.size() - 1);
+            int ref_index = min(closest_idx + static_cast<long unsigned int>(k), mpc_path_->poses.size() - 1);
             geometry_msgs::msg::PoseStamped ref_pose = mpc_path_->poses[ref_index];
             DM ref_position = reshape(DM({ref_pose.pose.position.x, ref_pose.pose.position.y, 0.0}), 3, 1);
 
@@ -238,17 +239,17 @@ private:
         DM ubx = pack_variables_fn(upper_bounds)[0];
         
         // Initial guess for optimization
-        DM initial_guess = DM::zeros(variables_flat.size1(), 1);
-        for (int i = 0; i < N + 1; ++i) {
-            double alpha = static_cast<double>(i) / N;
-            initial_guess(3 * i) = (1 - alpha) * initial_state(0) + alpha * final_position(0);
-            initial_guess(3 * i + 1) = (1 - alpha) * initial_state(1) + alpha * final_position(1);
-            // initial_guess(3 * i + 2) = (1 - alpha) * initial_state(2) + alpha * final_state(2);
-        }
+        // DM initial_guess = DM::zeros(variables_flat.size1(), 1);
+        // for (int i = 0; i < N + 1; ++i) {
+        //     double alpha = static_cast<double>(i) / N;
+        //     initial_guess(3 * i) = (1 - alpha) * initial_state(0) + alpha * final_position(0);
+        //     initial_guess(3 * i + 1) = (1 - alpha) * initial_state(1) + alpha * final_position(1);
+        //     // initial_guess(3 * i + 2) = (1 - alpha) * initial_state(2) + alpha * final_state(2);
+        // }
 
         // Solve NLP
         map<string, DM> solver_args = {
-            {"x0", initial_guess},   
+            // {"x0", initial_guess},   
             {"lbx", lbx}, 
             {"ubx", ubx}, 
             {"lbg", lbg},
