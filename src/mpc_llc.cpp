@@ -31,6 +31,18 @@ public:
 private:
     void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
         odometry_ = msg;
+
+        if (!mpc_path_) {
+            RCLCPP_WARN(this->get_logger(), "No Odometry Received Yet.");
+            return;
+        }
+
+        if (!risk_map_) {
+            RCLCPP_WARN(this->get_logger(), "No Risk Map Received Yet.");
+            return;
+        }
+        
+        computeControl();
     }
 
     void riskMapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg){
@@ -75,18 +87,6 @@ private:
 
     void pathCallback(const nav_msgs::msg::Path::SharedPtr msg) {
         mpc_path_ = msg;
-
-        if (!odometry_) {
-            RCLCPP_WARN(this->get_logger(), "No Odometry Received Yet.");
-            return;
-        }
-
-        if (!risk_map_) {
-            RCLCPP_WARN(this->get_logger(), "No Risk Map Received Yet.");
-            return;
-        }
-        
-        computeControl();
     }
 
     void computeControl(){
