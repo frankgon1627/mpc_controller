@@ -269,8 +269,8 @@ private:
         
         // publish the control input
         geometry_msgs::msg::Twist control_msg;
-        control_msg.linear.x = control_input.at(0, 0);
-        control_msg.angular.z = control_input.at(1, 0);
+        control_msg.linear.x = static_cast<double>(unpacked_solution[1](0, 0));
+        control_msg.angular.z = static_cast<double>(unpacked_solution[1](1, 0));
         control_pub_->publish(control_msg);
 
         // log the v, omega, x, y, and theta values for plotting
