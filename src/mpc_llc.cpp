@@ -6,7 +6,6 @@
 #include <geometry_msgs/msg/point32.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <custom_msgs_pkg/msg/polygon_array.hpp>
-#include <decomp_ros_msgs/msg/polyhedron_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <casadi/casadi.hpp>
