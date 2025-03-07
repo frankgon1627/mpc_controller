@@ -145,6 +145,7 @@ private:
                 closest_idx = i;
             }
         }
+        RCLCPP_INFO(this->get_logger(), "Closest Index: %d", closest_idx);
 
         // running state cost, control cost, and risk cost
         vector<vector<double>> Q_vals = {{10, 0}, {0, 10}};
@@ -155,6 +156,7 @@ private:
         for (int k=0; k < N; ++k){
             MX position = X(Slice(0, 2), k);
             int ref_index = min(closest_idx + static_cast<long unsigned int>(k), mpc_path_->poses.size() - 1);
+            RCLCPP_INFO(this->get_logger(), "Reference Index: %d", ref_index);
             geometry_msgs::msg::PoseStamped ref_pose = mpc_path_->poses[ref_index];
             DM ref_position = reshape(DM({ref_pose.pose.position.x, ref_pose.pose.position.y}), 2, 1);
 
