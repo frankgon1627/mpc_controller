@@ -23,6 +23,7 @@ public:
             "/planners/mpc_path", 10, bind(&MPCPlannerCorridors::pathCallback, this, placeholders::_1));
         risk_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
             "/planners/risk_map", 10, bind(&MPCPlannerCorridors::riskMapCallback, this, placeholders::_1));
+        control_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/planners/mpc_cmd_vel", 10);
         RCLCPP_INFO(this->get_logger(), "MPC Controller Initialized.");
     }
 
@@ -261,18 +262,15 @@ private:
         DM solution = solver_result["x"];
         DMVector unpacked_solution = unpack_variables_fn(solution);
 
-        // Store solution in a trajectory container
-        vector<vector<double>> trajectory;
-        for (int i = 0; i < N+1; ++i) {
-            vector<double> state{
-                static_cast<double>(unpacked_solution[0](0, i)), 
-                static_cast<double>(unpacked_solution[0](1, i)), 
-                static_cast<double>(unpacked_solution[0](2, i))};
-            trajectory.push_back(state);
-        }
-        RCLCPP_INFO(this->get_logger(), "Generated trajectory with %ld points", trajectory.size());
-        publishTrajectory(trajectory);
-        RCLCPP_INFO(this->get_logger(), "Published Trajectory");
+        // extract the first control input
+        DM control_input = unpacked_solution[1](Slice(), 0);
+        RCLCPP_INFO(this->get_logger(), "Control Input: %s", control_input.get_str().c_str());
+        
+        // publish the control input
+        geometry_msgs::msg::Twist control_msg;
+        control_msg.linear.x = control_input(0);
+        control_msg.angular.z = control_input(1);
+        control_pub_->publish(control_msg);
 
         // log the v, omega, x, y, and theta values for plotting
 
@@ -287,51 +285,10 @@ private:
         1.0 - 2.0 * (pow(quaternion.y, 2) + pow(quaternion.z, 2)));
     }
 
-    void publishTrajectory(vector<vector<double>>& trajectory){
-        nav_msgs::msg::Path path_msg;
-        path_msg.header.stamp = this->now();
-        path_msg.header.frame_id = "map";
-
-        visualization_msgs::msg::Marker path_points;
-        path_points.header.stamp = this->now();
-        path_points.header.frame_id = "map";
-        path_points.type = visualization_msgs::msg::Marker::SPHERE_LIST;
-        path_points.action = visualization_msgs::msg::Marker::ADD;
-        path_points.scale.x = 0.1;
-        path_points.scale.y = 0.1;
-        path_points.scale.z = 0.1;
-        path_points.color.r = 1.0; 
-        path_points.color.g = 0.0;
-        path_points.color.b = 0.0;
-        path_points.color.a = 1.0;
-
-        for (const vector<double>& state : trajectory) {
-            // add a pose to the path message
-            geometry_msgs::msg::PoseStamped pose;
-            pose.header.stamp = this->now();
-            pose.header.frame_id = "map";
-
-            pose.pose.position.x = state[0];
-            pose.pose.position.y = state[1];
-            pose.pose.position.z = 0.0;
-            path_msg.poses.push_back(pose);
-
-            // add a point to the marker message
-            geometry_msgs::msg::Point point;
-            point.x = state[0];
-            point.y = state[1];
-            point.z = 0.1;
-            path_points.points.push_back(point);
-        }
-
-        mpc_path_pub_->publish(path_msg);
-        mpc_path_points_->publish(path_points);
-        RCLCPP_INFO(this->get_logger(), "Published trajectory with %ld points", trajectory.size());
-    }
-
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr mpc_path_sub_;
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr risk_map_sub_;
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr control_pub_;
 
     nav_msgs::msg::Odometry::SharedPtr odometry_;
     nav_msgs::msg::OccupancyGrid::SharedPtr risk_map_;
