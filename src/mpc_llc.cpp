@@ -33,7 +33,7 @@ private:
         odometry_ = msg;
 
         if (!mpc_path_) {
-            RCLCPP_WARN(this->get_logger(), "No Odometry Received Yet.");
+            RCLCPP_WARN(this->get_logger(), "No MPC Path Received Yet.");
             return;
         }
 
