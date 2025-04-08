@@ -146,7 +146,7 @@ private:
                 closest_idx = i;
             }
         }
-        RCLCPP_INFO(this->get_logger(), "Closest Index: %d", closest_idx);
+        RCLCPP_INFO(this->get_logger(), "Closest Index: %ld", closest_idx);
 
         // running state cost, control cost, and risk cost
         vector<vector<double>> Q_vals = {{10, 0}, {0, 10}};
