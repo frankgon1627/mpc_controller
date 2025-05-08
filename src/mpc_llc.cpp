@@ -53,8 +53,8 @@ private:
                                         risk_map_->info.origin.position.y,
                                         0.0}), 3, 1);
         lower_left_to_risk_center_ = reshape(DM({
-                                            risk_map_->info.height*risk_map_->info.resolution/2,
                                             risk_map_->info.width*risk_map_->info.resolution/2,
+                                            risk_map_->info.height*risk_map_->info.resolution/2,
                                             0.0}), 3, 1);
         global_risk_to_center_ = global_to_lower_left_ - lower_left_to_risk_center_;
 
@@ -62,13 +62,13 @@ private:
         int width = risk_map_->info.width;
         double resolution = risk_map_->info.resolution;
 
-        vector<double> grid_x(height);
-        vector<double> grid_y(width);
+        vector<double> grid_x(width);
+        vector<double> grid_y(height);
 
-        for (int i = 0; i < height; i++) {
+        for (int i = 0; i < width; i++) {
             grid_x[i] = risk_map_->info.origin.position.x + (i + 0.5) * resolution;
         }
-        for (int j = 0; j < width; j++) {
+        for (int j = 0; j < height; j++) {
             grid_y[j] = risk_map_->info.origin.position.y + (j + 0.5) * resolution;
         }
 
@@ -125,10 +125,10 @@ private:
         lower_bounds[0](0, Slice()) = risk_map_->info.origin.position.x * DM::ones(1, lower_bounds[0].size2());
         lower_bounds[0](1, Slice()) = risk_map_->info.origin.position.y * DM::ones(1, lower_bounds[0].size2());
         upper_bounds[0](0, Slice()) = (risk_map_->info.origin.position.x + 
-                                        risk_map_->info.resolution * risk_map_->info.height
+                                        risk_map_->info.resolution * risk_map_->info.width
                                         ) * DM::ones(1, lower_bounds[0].size2());
         upper_bounds[0](1, Slice()) = (risk_map_->info.origin.position.y + 
-                                        risk_map_->info.resolution * risk_map_->info.width
+                                        risk_map_->info.resolution * risk_map_->info.height
                                         ) * DM::ones(1, lower_bounds[0].size2());
 
         // determine the closest point index on the mpc path
