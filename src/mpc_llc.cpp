@@ -2,7 +2,6 @@
 #include <nav_msgs/msg/path.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <nav_msgs/msg/occupancy_grid.hpp>
-#include <geometry_msgs/msg/polygon.hpp>
 #include <geometry_msgs/msg/point32.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <custom_msgs_pkg/msg/polygon_array.hpp>
@@ -22,8 +21,8 @@ public:
             "/dlio/odom_node/odom", 10, bind(&MPCPlannerCorridors::odometryCallback, this, placeholders::_1));
         mpc_path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
             "/planners/mpc_path", 10, bind(&MPCPlannerCorridors::pathCallback, this, placeholders::_1));
-        risk_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-            "/planners/risk_map", 10, bind(&MPCPlannerCorridors::riskMapCallback, this, placeholders::_1));
+        combined_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
+            "/obstacle_detection/combined_map", 10, bind(&MPCPlannerCorridors::combinedMapCallback, this, placeholders::_1));
 
         control_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/planners/mpc_cmd_vel_unstamped", 10);
         RCLCPP_INFO(this->get_logger(), "MPC Controller Initialized.");
@@ -38,52 +37,16 @@ private:
             return;
         }
 
-        if (!risk_map_) {
-            RCLCPP_WARN(this->get_logger(), "No Risk Map Received Yet.");
+        if (!combined_map_) {
+            RCLCPP_WARN(this->get_logger(), "No Combined Map Received Yet.");
             return;
         }
         
         computeControl();
     }
 
-    void riskMapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg){
-        risk_map_ = msg;
-        global_to_lower_left_ = reshape(DM({
-                                        risk_map_->info.origin.position.x,
-                                        risk_map_->info.origin.position.y,
-                                        0.0}), 3, 1);
-        lower_left_to_risk_center_ = reshape(DM({
-                                            risk_map_->info.width*risk_map_->info.resolution/2,
-                                            risk_map_->info.height*risk_map_->info.resolution/2,
-                                            0.0}), 3, 1);
-        global_risk_to_center_ = global_to_lower_left_ - lower_left_to_risk_center_;
-
-        int height = risk_map_->info.height;
-        int width = risk_map_->info.width;
-        double resolution = risk_map_->info.resolution;
-
-        vector<double> grid_x(width);
-        vector<double> grid_y(height);
-
-        for (int i = 0; i < width; i++) {
-            grid_x[i] = risk_map_->info.origin.position.x + (i + 0.5) * resolution;
-        }
-        for (int j = 0; j < height; j++) {
-            grid_y[j] = risk_map_->info.origin.position.y + (j + 0.5) * resolution;
-        }
-
-        vector<double> risk_values(width * height);
-        for (int j = 0; j < height; j++) {
-            for (int i = 0; i < width; i++) {
-            int idx = j * width + i;
-            int occ_value = risk_map_->data[idx];
-            risk_values[idx] = static_cast<double>(occ_value);
-            }
-        }
-
-        vector<vector<double>> grid = {grid_x, grid_y};
-        continuous_risk_map_ = interpolant("interp", "bspline", grid, risk_values, {{"degree", vector<int>{3, 3}}});
-        // continuous_risk_map_ = interpolant("interp", "linear", grid, risk_values);
+    void combinedMapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg){
+        combined_map_ = msg;
     }
 
     void pathCallback(const nav_msgs::msg::Path::SharedPtr msg) {
@@ -122,13 +85,13 @@ private:
         RCLCPP_INFO(this->get_logger(), "Set Input Bounds");
 
         // state bounds
-        lower_bounds[0](0, Slice()) = risk_map_->info.origin.position.x * DM::ones(1, lower_bounds[0].size2());
-        lower_bounds[0](1, Slice()) = risk_map_->info.origin.position.y * DM::ones(1, lower_bounds[0].size2());
-        upper_bounds[0](0, Slice()) = (risk_map_->info.origin.position.x + 
-                                        risk_map_->info.resolution * risk_map_->info.width
+        lower_bounds[0](0, Slice()) = combined_map_->info.origin.position.x * DM::ones(1, lower_bounds[0].size2());
+        lower_bounds[0](1, Slice()) = combined_map_->info.origin.position.y * DM::ones(1, lower_bounds[0].size2());
+        upper_bounds[0](0, Slice()) = (combined_map_->info.origin.position.x + 
+                                        combined_map_->info.resolution * combined_map_->info.width
                                         ) * DM::ones(1, lower_bounds[0].size2());
-        upper_bounds[0](1, Slice()) = (risk_map_->info.origin.position.y + 
-                                        risk_map_->info.resolution * risk_map_->info.height
+        upper_bounds[0](1, Slice()) = (combined_map_->info.origin.position.y + 
+                                        combined_map_->info.resolution * combined_map_->info.height
                                         ) * DM::ones(1, lower_bounds[0].size2());
 
         // determine the closest point index on the mpc path
@@ -148,7 +111,7 @@ private:
         }
         RCLCPP_INFO(this->get_logger(), "Closest Index: %ld", closest_idx);
 
-        // running state cost, control cost, and risk cost
+        // running state cost, control cost, and combined cost
         vector<vector<double>> Q_vals = {{10, 0}, {0, 10}};
         DM Q = DM(Q_vals);
         vector<vector<double>> R_vals = {{1, 0}, {0, 1/pi}};
@@ -187,32 +150,12 @@ private:
         MX x_next = x_now + delta_x;
         MX dynamics_constraint = reshape(x_next - X(Slice(), Slice(1, N+1)), -1, 1);
         RCLCPP_INFO(this->get_logger(), "Set Dynamics Constraint");
-
-        // polyhedron constraints
-        vector<MX> polyhedron_constraint_vector;
-        // int last_k = 0;
-        // for(size_t i=0; i < polyhedrons.size(); ++i){
-        //     int next_k = static_cast<int>(path_proportions[i] * N);
-        //     vec_E<Hyperplane2D> hyperplanes = polyhedrons[i].hyperplanes();
-        //     for(int k=last_k; k < next_k; ++k){
-        //         // ensure point is in the polyhedron
-        //         for(Hyperplane2D hyperplane : hyperplanes){
-        //             Vec2f normal = hyperplane.n_;
-        //             Vec2f point = hyperplane.p_;
-        //             MX value = normal[0]*(X(0, k) - point[0]) + normal[1]*(X(1, k) - point[1]);
-        //             polyhedron_constraint_vector.push_back(value);
-        //         }
-        //     }
-        //     last_k = next_k;
-        // }
-        MX polyhedron_constraint = vertcat(polyhedron_constraint_vector);
-        RCLCPP_INFO(this->get_logger(), "Set Polyhedron Constraint");
         
         MX equality_constraints = vertcat(
             initial_state_constraint, 
             dynamics_constraint,
             v_dot_constraint);
-        MX constraints = vertcat(equality_constraints, r_dot_constraint, polyhedron_constraint);
+        MX constraints = vertcat(equality_constraints, r_dot_constraint);
 
         // set up NLP solver and solve the program
         Function solver = nlpsol("solver", "ipopt", MXDict{
@@ -229,13 +172,11 @@ private:
         DM lbg = vertcat(
             zero_bg_constraints, 
             -DM::ones(v_dot_constraint.size1(), 1),
-            -(pi/4)*DM::ones(r_dot_constraint.size1(), 1),
-            -DM::inf(polyhedron_constraint.size1(), 1));
+            -(pi/4)*DM::ones(r_dot_constraint.size1(), 1));
         DM ubg = vertcat(
             zero_bg_constraints,
             DM::ones(v_dot_constraint.size1(), 1),
-            (pi/4)*DM::ones(r_dot_constraint.size1(), 1),
-            DM::zeros(polyhedron_constraint.size1(), 1));
+            (pi/4)*DM::ones(r_dot_constraint.size1(), 1));
 
         // Flatten decision variable bounds
         DM lbx = pack_variables_fn(lower_bounds)[0];
@@ -291,17 +232,12 @@ private:
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr mpc_path_sub_;
-    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr risk_map_sub_;
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr combined_map_sub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr control_pub_;
 
     nav_msgs::msg::Odometry::SharedPtr odometry_;
-    nav_msgs::msg::OccupancyGrid::SharedPtr risk_map_;
+    nav_msgs::msg::OccupancyGrid::SharedPtr combined_map_;
     nav_msgs::msg::Path::SharedPtr mpc_path_;
-
-    DM global_to_lower_left_;
-    DM lower_left_to_risk_center_;
-    DM global_risk_to_center_;
-    Function continuous_risk_map_;
 
     // casadi optimization relevant declarations
     Function pack_variables_fn_;
