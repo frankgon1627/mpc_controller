@@ -70,19 +70,16 @@ private:
 
         DMVector upper_bounds = unpack_variables_fn(DM::inf(variables_flat.rows(), 1));
         DMVector lower_bounds = unpack_variables_fn(-DM::inf(variables_flat.rows(), 1));
-        RCLCPP_INFO(this->get_logger(), "Made Variables and Bound Arrays");
 
         // set initial and final state vectors
         DM initial_state = reshape(DM(vector<double>{
             odometry_->pose.pose.position.x, 
             odometry_->pose.pose.position.y, 
             yaw_from_quaternion(odometry_->pose.pose.orientation)}), 3, 1);
-        RCLCPP_INFO(this->get_logger(), "Initial Pose: %s", initial_state.get_str().c_str());
 
         // input bounds
         lower_bounds[1] = repmat(DM(vector<double>{0.0, -pi/4}), 1, lower_bounds[1].size2());
         upper_bounds[1] = repmat(DM(vector<double>{1.5, pi/4}), 1, upper_bounds[1].size2());
-        RCLCPP_INFO(this->get_logger(), "Set Input Bounds");
 
         // state bounds
         lower_bounds[0](0, Slice()) = combined_map_->info.origin.position.x * DM::ones(1, lower_bounds[0].size2());
@@ -109,7 +106,6 @@ private:
                 closest_idx = i;
             }
         }
-        RCLCPP_INFO(this->get_logger(), "Closest Index: %ld", closest_idx);
 
         // running state cost, control cost, and combined cost
         vector<vector<double>> Q_vals = {{10, 0}, {0, 10}};
@@ -120,7 +116,6 @@ private:
         for (int k=0; k < N; ++k){
             MX position = X(Slice(0, 2), k);
             int ref_index = min(closest_idx + static_cast<long unsigned int>(k), mpc_path_->poses.size() - 1);
-            RCLCPP_INFO(this->get_logger(), "Reference Index: %d", ref_index);
             geometry_msgs::msg::PoseStamped ref_pose = mpc_path_->poses[ref_index];
             DM ref_position = reshape(DM({ref_pose.pose.position.x, ref_pose.pose.position.y}), 2, 1);
 
@@ -129,17 +124,13 @@ private:
             objective = objective + mtimes(mtimes(state_penalty.T(), Q), state_penalty);
             objective = objective + mtimes(mtimes(control_penalty.T(), R), control_penalty);
         }   
-        RCLCPP_INFO(this->get_logger(), "Set Running State and Control Cost");
 
         // initial state constraint
         MX initial_state_constraint = reshape(X(Slice(), 0) - initial_state, -1, 1);
-        RCLCPP_INFO(this->get_logger(), "Set Initial State Constraint");
 
         // add acceleration constraint
         MX v_dot_constraint = reshape((1/dt)*(U(0, Slice(1, N)) - U(0, Slice(0, N-1))), -1, 1);
         MX r_dot_constraint = reshape((1/dt)*(U(1, Slice(1, N)) - U(1, Slice(0, N-1))), -1, 1);
-        RCLCPP_INFO(this->get_logger(), "Set V_dot Constraint");
-        RCLCPP_INFO(this->get_logger(), "Set R_dot Constraint");
 
         // dynamics constraints
         MX x_now = X(Slice(), Slice(0, N));
@@ -149,7 +140,6 @@ private:
             U(1, Slice()));
         MX x_next = x_now + delta_x;
         MX dynamics_constraint = reshape(x_next - X(Slice(), Slice(1, N+1)), -1, 1);
-        RCLCPP_INFO(this->get_logger(), "Set Dynamics Constraint");
         
         MX equality_constraints = vertcat(
             initial_state_constraint, 
