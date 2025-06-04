@@ -15,6 +15,7 @@ find_package(custom_msgs_pkg REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(casadi REQUIRED)
+find_package(obstacle_msgs REQUIRED)
 
 add_executable(mpc_llc src/mpc_llc.cpp)
 target_link_libraries(mpc_llc casadi)
@@ -27,6 +28,7 @@ ament_target_dependencies(mpc_llc
   custom_msgs_pkg
   pcl_conversions 
   casadi
+  obstacle_msgs
 )
 
 install(TARGETS

@@ -4,6 +4,7 @@
 #include <nav_msgs/msg/occupancy_grid.hpp>
 #include <geometry_msgs/msg/point32.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <obstacle_msgs/msg/risk_map.hpp>
 #include <custom_msgs_pkg/msg/polygon_array.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 #include <pcl_conversions/pcl_conversions.h>
@@ -21,7 +22,7 @@ public:
             "/dlio/odom_node/odom", 10, bind(&MPCPlannerCorridors::odometryCallback, this, placeholders::_1));
         mpc_path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
             "/planners/mpc_path", 10, bind(&MPCPlannerCorridors::pathCallback, this, placeholders::_1));
-        combined_map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
+        combined_map_sub_ = this->create_subscription<obstacle_msgs::msg::RiskMap>(
             "/obstacle_detection/combined_map", 10, bind(&MPCPlannerCorridors::combinedMapCallback, this, placeholders::_1));
 
         control_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/planners/mpc_cmd_vel_unstamped", 10);
@@ -45,7 +46,7 @@ private:
         computeControl();
     }
 
-    void combinedMapCallback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg){
+    void combinedMapCallback(const obstacle_msgs::msg::RiskMap::SharedPtr msg){
         combined_map_ = msg;
     }
 
@@ -78,7 +79,7 @@ private:
             yaw_from_quaternion(odometry_->pose.pose.orientation)}), 3, 1);
 
         // input bounds
-        lower_bounds[1] = repmat(DM(vector<double>{0.0, -pi/4}), 1, lower_bounds[1].size2());
+        lower_bounds[1] = repmat(DM(vector<double>{0.1, -pi/4}), 1, lower_bounds[1].size2());
         upper_bounds[1] = repmat(DM(vector<double>{1.5, pi/4}), 1, upper_bounds[1].size2());
 
         // state bounds
@@ -222,11 +223,11 @@ private:
 
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr mpc_path_sub_;
-    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr combined_map_sub_;
+    rclcpp::Subscription<obstacle_msgs::msg::RiskMap>::SharedPtr combined_map_sub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr control_pub_;
 
     nav_msgs::msg::Odometry::SharedPtr odometry_;
-    nav_msgs::msg::OccupancyGrid::SharedPtr combined_map_;
+    obstacle_msgs::msg::RiskMap::SharedPtr combined_map_;
     nav_msgs::msg::Path::SharedPtr mpc_path_;
 
     // casadi optimization relevant declarations

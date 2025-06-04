@@ -18,6 +18,7 @@
   <depend>pcl_conversions</depend>
   <depend>geometry_msgs</depend>
   <depend>std_srvs</depend>
+  <depend>obstacle_msgs</depend>
 
   <!-- <exec_depend>casadi</exec_depend> -->
 
