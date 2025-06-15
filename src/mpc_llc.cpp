@@ -19,18 +19,18 @@ class MPCPlannerCorridors: public rclcpp::Node{
 public:
     MPCPlannerCorridors(): Node("mpc_controller"){
         odometry_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-            "/dlio/odom_node/odom", 10, bind(&MPCPlannerCorridors::odometryCallback, this, placeholders::_1));
+            "/dlio/odom_node/odom", 10, bind(&MPCPlannerCorridors::odometry_callback, this, placeholders::_1));
         mpc_path_sub_ = this->create_subscription<nav_msgs::msg::Path>(
-            "/planners/mpc_path", 10, bind(&MPCPlannerCorridors::pathCallback, this, placeholders::_1));
+            "/planners/mpc_path", 10, bind(&MPCPlannerCorridors::path_callback, this, placeholders::_1));
         combined_map_sub_ = this->create_subscription<obstacle_detection_msgs::msg::RiskMap>(
-            "/obstacle_detection/combined_map", 10, bind(&MPCPlannerCorridors::combinedMapCallback, this, placeholders::_1));
+            "/obstacle_detection/combined_map", 10, bind(&MPCPlannerCorridors::combined_map_callback, this, placeholders::_1));
 
         control_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/planners/mpc_cmd_vel_unstamped", 10);
         RCLCPP_INFO(this->get_logger(), "MPC Controller Initialized.");
     }
 
 private:
-    void odometryCallback(const nav_msgs::msg::Odometry::SharedPtr msg){
+    void odometry_callback(const nav_msgs::msg::Odometry::SharedPtr msg){
         odometry_ = msg;
 
         if (!mpc_path_) {
@@ -46,11 +46,11 @@ private:
         computeControl();
     }
 
-    void combinedMapCallback(const obstacle_detection_msgs::msg::RiskMap::SharedPtr msg){
+    void combined_map_callback(const obstacle_detection_msgs::msg::RiskMap::SharedPtr msg){
         combined_map_ = msg;
     }
 
-    void pathCallback(const nav_msgs::msg::Path::SharedPtr msg) {
+    void path_callback(const nav_msgs::msg::Path::SharedPtr msg) {
         mpc_path_ = msg;
     }
 
