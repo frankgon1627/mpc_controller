@@ -25,7 +25,7 @@ public:
         combined_map_sub_ = this->create_subscription<obstacle_detection_msgs::msg::RiskMap>(
             "/obstacle_detection/combined_map", 10, bind(&MPCPlannerCorridors::combined_map_callback, this, placeholders::_1));
 
-        control_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/planners/mpc_cmd_vel_unstamped", 10);
+        control_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/j100_0000/auto_mode/cmd_vel", 10);
         RCLCPP_INFO(this->get_logger(), "MPC Controller Initialized.");
     }
 
